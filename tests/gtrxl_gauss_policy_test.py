@@ -3,10 +3,10 @@ import numpy as np
 from torch.distributions.normal import Normal
 
 from GTrXL.gtrxl import StableTransformerXL
-
+from torch.distributions import Categorical
 
 class TransformerGaussianPolicy(torch.nn.Module):
-    def __init__(self, state_dim, act_dim, n_transformer_layers=4, n_attn_heads=3):
+    def __init__(self, state_dim, act_dim, batch_sz, n_transformer_layers=1, n_attn_heads=3):
         '''
             NOTE - I/P Shape : [seq_len, batch_size, state_dim]
         '''
@@ -15,7 +15,7 @@ class TransformerGaussianPolicy(torch.nn.Module):
         self.act_dim = act_dim
 
         self.transformer = StableTransformerXL(d_input=state_dim, n_layers=n_transformer_layers,
-                                               n_heads=n_attn_heads, d_head_inner=32, d_ff_inner=64)
+                                               n_heads=n_attn_heads, d_head_inner=32, d_ff_inner=64, batch_sz=batch_sz)
         self.memory = None
 
         self.head_sate_value = torch.nn.Linear(state_dim, 1)
@@ -39,7 +39,10 @@ class TransformerGaussianPolicy(torch.nn.Module):
         trans_state = self.transformer(state, self.memory)
         trans_state, self.memory = trans_state['logits'], trans_state['memory']
 
-        policy = self._distribution(trans_state)
+        # policy = self._distribution(trans_state)
+        probs = self.head_act_mean(trans_state)
+        policy = Categorical(probs)
+
         state_value = self.head_sate_value(trans_state)
 
         logp_a = None
@@ -64,9 +67,9 @@ class TransformerGaussianPolicy(torch.nn.Module):
 
 
 if __name__ == '__main__':
-    states = torch.randn(5, 5, 8)  # seq_size, batch_size, dim - better if dim % 2 == 0
+    states = torch.randn(5, 1, 4)  # seq_size, batch_size, dim - better if dim % 2 == 0
     print("=> Testing Policy")
-    policy = TransformerGaussianPolicy(state_dim=states.shape[-1], act_dim=1)
+    policy = TransformerGaussianPolicy(state_dim=states.shape[-1], act_dim=1, batch_sz=states.shape[1])
     for i in range(2):
         act = policy(states)
         action = act[0].sample()
