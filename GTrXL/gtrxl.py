@@ -190,6 +190,7 @@ class StableTransformerEncoderLayerXL(torch.nn.Module):
     ):
         super(StableTransformerEncoderLayerXL, self).__init__()
 
+        self.d_input = d_input
         self.gating = gating
         self.gate1 = GatingMechanism(d_input)
         self.gate2 = GatingMechanism(d_input)
@@ -221,6 +222,7 @@ class StableTransformerXL(torch.nn.Module):
             n_heads,
             d_head_inner,
             d_ff_inner,
+            batch_sz,
             dropout=0.1,
             dropouta=0.0,
     ):
@@ -257,10 +259,12 @@ class StableTransformerXL(torch.nn.Module):
             torch.nn.Parameter(torch.Tensor(self.n_heads, self.d_head_inner)),
         )
 
+        self.batch_sz = batch_sz
+
     def init_memory(self, device=torch.device("cpu")):
         return [
             # torch.empty(0, dtype=torch.float).to(device)
-            torch.zeros(20, 5, 8, dtype=torch.float).to(device)
+            torch.zeros(20, self.batch_sz, self.d_input, dtype=torch.float).to(device)
             for _ in range(self.n_layers + 1)
         ]
 
