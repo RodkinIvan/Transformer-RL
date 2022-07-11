@@ -154,6 +154,7 @@ def ResNet152(num_classes, channels=3):
 
 class Encoder(nn.Module):
   def __init__(self):
+    super(Encoder, self).__init__()
     self.resnet47 = ResNet47(512)
     # self.fc1 = nn.Linear(in_features=None, out_features=512)
     self.relu = nn.ReLU()
