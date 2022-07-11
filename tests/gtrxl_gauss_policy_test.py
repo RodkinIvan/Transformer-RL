@@ -40,6 +40,7 @@ class TransformerGaussianPolicy(torch.nn.Module):
         trans_state, self.memory = trans_state['logits'], trans_state['memory']
 
         # policy = self._distribution(trans_state)
+
         probs = self.head_act_mean(trans_state)
         policy = Categorical(probs)
 

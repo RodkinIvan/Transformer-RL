@@ -7,7 +7,7 @@ import numpy as np
 import gym
 from collections import deque
 
-from tests.gtrxl_gauss_policy_test import TransformerGaussianPolicy
+from gtrxl_gauss_policy_test import TransformerGaussianPolicy
 
 
 # define policy network
