@@ -7,7 +7,8 @@ import numpy as np
 import gym
 from collections import deque
 
-from gtrxl_gauss_policy_test import TransformerGaussianPolicy
+from GTrXL.gtrxl import GTrXL
+from torch.distributions import Categorical
 
 
 # define policy network
@@ -24,22 +25,37 @@ class PolicyNet(nn.Module):
         return x
 
 
+class TransformerPolicy(torch.nn.Module):
+    def __init__(self, state_dim, act_dim, batch_sz, n_transformer_layers=1, n_attn_heads=1):
+        '''
+            NOTE - I/P Shape : [seq_len, batch_size, state_dim]
+        '''
+        super(TransformerPolicy, self).__init__()
+        self.state_dim = state_dim
+        self.act_dim = act_dim
+
+        self.transformer = GTrXL(d_model=state_dim, nheads=n_attn_heads, transformer_layers=n_transformer_layers)
+        self.memory = None
+
+        self.head_act_mean = torch.nn.Linear(state_dim, act_dim)
+
+    def forward(self, state):
+        trans_state = self.transformer(state)
+        probs = F.softmax(self.head_act_mean(trans_state), dim=-1)
+
+        return probs
+
+
 Trans = True
 
 
 def attempt(state, policy):
     if Trans:
         state = [state]
-    probs = policy(torch.tensor(np.array(state)).unsqueeze(0).float())
+    probs = policy(torch.tensor(state).unsqueeze(0).float())
     # sample an action from that set of probs
-
-    if Trans:
-        sampler = probs[0]
-        action = sampler.sample()
-    else:
-        sampler = Categorical(probs)
-        action = sampler.sample()
-
+    sampler = Categorical(probs)
+    action = sampler.sample()
     return state, action, sampler
 
 
@@ -47,7 +63,7 @@ def attempt(state, policy):
 env = gym.make("CartPole-v1")
 # instantiate the policy
 if Trans:
-    policy = TransformerGaussianPolicy(env.observation_space.shape[0], 1, batch_sz=1)
+    policy = TransformerPolicy(env.observation_space.shape[0], env.action_space.n, batch_sz=1)
 else:
     policy = PolicyNet(env.observation_space.shape[0], 20, env.action_space.n)
 
@@ -57,7 +73,7 @@ optimizer = torch.optim.Adam(policy.parameters())
 gamma = 0.99
 n_episode = 1
 returns = deque(maxlen=100)
-render_rate = 1000  # render every render_rate episodes
+render_rate = 500  # render every render_rate episodes
 
 for p in policy.parameters():
     print(p)
@@ -101,14 +117,13 @@ for i in range(10000):
     # calculate gradient
     probs = policy(states)
 
-    if Trans:
-        sampler = probs[0]
-    else:
-        sampler = Categorical(probs)
+    sampler = Categorical(probs[:, 0, :] if Trans else probs)
 
     log_probs = -sampler.log_prob(actions)  # "-" because it was built to work with gradient descent,
     # but we are using gradient ascent
+
     pseudo_loss = torch.sum(log_probs * R)  # loss that when differentiated with autograd gives the gradient of J(θ)
+
     # update policy weights
     optimizer.zero_grad()
     pseudo_loss.backward()

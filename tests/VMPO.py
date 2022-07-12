@@ -187,7 +187,7 @@ def main():
 
     if random_seed:
         torch.manual_seed(random_seed)
-        env.seed(random_seed)
+        env.reset(seed=random_seed)
 
     memory = Memory()
     ppo = VMPO(state_dim, action_dim, n_latent_var, lr, betas, gamma, K_epochs, eps_clip)
@@ -201,6 +201,7 @@ def main():
     # training loop
     for i_episode in range(1, max_episodes + 1):
         state = env.reset()
+
         for t in range(max_timesteps):
             timestep += 1
 
@@ -222,9 +223,10 @@ def main():
             if render or running_reward > (log_interval * solved_reward) * 0.8:
                 env.render()
             if done:
+                avg_length += t
                 break
 
-        avg_length += t
+
 
         # stop training if avg_reward > solved_reward
         if running_reward > (log_interval * solved_reward):
