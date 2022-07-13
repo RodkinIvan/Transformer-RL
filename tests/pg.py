@@ -18,7 +18,7 @@ class PolicyNet(nn.Module):
         self.h = nn.Linear(nS, nH)
         self.out = nn.Linear(nH, nA)
 
-    # define forward pass with one hidden layer with ReLU activation and sofmax after output layer
+    # define forward pass with one hidden layer with ReLU activation and softmax after output layer
     def forward(self, x):
         x = F.relu(self.h(x))
         x = F.softmax(self.out(x), dim=1)
@@ -34,13 +34,13 @@ class TransformerPolicy(torch.nn.Module):
         self.state_dim = state_dim
         self.act_dim = act_dim
 
-        self.transformer = GTrXL(d_model=state_dim, nheads=n_attn_heads, transformer_layers=n_transformer_layers)
+        self.transformer = GTrXL(input_dim=state_dim, head_num=n_attn_heads, layer_num=n_transformer_layers, embedding_dim=4)
         self.memory = None
 
         self.head_act_mean = torch.nn.Linear(state_dim, act_dim)
 
     def forward(self, state):
-        trans_state = self.transformer(state)
+        trans_state = self.transformer(state)['logit']
         probs = F.softmax(self.head_act_mean(trans_state), dim=-1)
 
         return probs
