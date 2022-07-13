@@ -10,10 +10,12 @@ from collections import deque
 from GTrXL.gtrxl import GTrXL
 from torch.distributions import Categorical
 
+import wandb
+
 
 # define policy network
 class PolicyNet(nn.Module):
-    def __init__(self, nS, nH, nA): # nS: state space size, nH: n. of neurons in hidden layer, nA: size action space
+    def __init__(self, nS, nH, nA):  # nS: state space size, nH: n. of neurons in hidden layer, nA: size action space
         super(PolicyNet, self).__init__()
         self.h = nn.Linear(nS, nH)
         self.out = nn.Linear(nH, nA)
@@ -34,7 +36,8 @@ class TransformerPolicy(torch.nn.Module):
         self.state_dim = state_dim
         self.act_dim = act_dim
 
-        self.transformer = GTrXL(input_dim=state_dim, head_num=n_attn_heads, layer_num=n_transformer_layers, embedding_dim=4)
+        self.transformer = GTrXL(input_dim=state_dim, head_num=n_attn_heads, layer_num=n_transformer_layers,
+                                 embedding_dim=4)
         self.memory = None
 
         self.head_act_mean = torch.nn.Linear(state_dim, act_dim)
@@ -46,7 +49,7 @@ class TransformerPolicy(torch.nn.Module):
         return probs
 
 
-Trans = True
+Trans = False
 
 
 def attempt(state, policy):
@@ -59,6 +62,7 @@ def attempt(state, policy):
     return state, action, sampler
 
 
+wandb.init(project='Transformer-RL', entity='irodkin')
 # create environment
 env = gym.make("CartPole-v1")
 # instantiate the policy
@@ -78,7 +82,7 @@ render_rate = 500  # render every render_rate episodes
 for p in policy.parameters():
     print(p)
 
-for i in range(10000):
+for i in range(2000):
     rewards = []
     actions = []
     states = []
@@ -106,7 +110,7 @@ for i in range(10000):
     # preprocess rewards
     rewards = np.array(rewards)
     # calculate rewards to go for less variance
-    R = torch.tensor([np.sum(rewards[i:]*(gamma**np.array(range(i, len(rewards))))) for i in range(len(rewards))])
+    R = torch.tensor([np.sum(rewards[i:] * (gamma ** np.array(range(i, len(rewards))))) for i in range(len(rewards))])
     # or uncomment following line for normal rewards
     # R = torch.sum(torch.tensor(rewards))
 
@@ -132,9 +136,9 @@ for i in range(10000):
     # calculate average return and print it out
     returns.append(np.sum(rewards))
     print("Episode: {:6d}\tAvg. Return: {:6.2f}".format(n_episode, np.mean(returns)))
+    wandb.log({'Avg reward': np.mean(returns)})
     n_episode += 1
 
 # close environment
 env.close()
-for p in policy.parameters():
-    print(p)
+wandb.finish()
