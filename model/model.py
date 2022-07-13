@@ -47,7 +47,7 @@ class Encoder(nn.Module):
 
 
 class CoBERL(nn.Module):
-  def __init__(self, state_dim, act_dim, batch_sz, n_transformer_layers=1, n_attn_heads=1):
+  def __init__(self):
     super(CoBERL, self).__init__()
     self.encoder = Encoder()
 
@@ -87,7 +87,7 @@ class CoBERL(nn.Module):
 
 
 if __name__ == "__main__":
-  model = CoBERL(64, 4, batch_sz=1)
+  model = CoBERL()
   input = torch.rand(size=(1, 3, 240, 240))
   output = model(input)
   output
