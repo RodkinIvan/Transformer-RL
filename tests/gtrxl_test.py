@@ -8,13 +8,11 @@ import gym
 
 
 def main():
+
     H, logprint = set_up_hyperparams()
 
-    env = gym.make('DeepmindLabNavMazeRandomGoal01-v0',
-                   observations=['RGB_INTERLEAVED'],
-                   width=64,
-                   height=64,
-                   )
+    env = gym.make('CartPole-v1')
+
     H.img_size = 64
     H.device = 'cuda:' + H.gpu if H.gpu is not None else 'cpu'
 
@@ -37,7 +35,7 @@ def main():
 
             # Running policy_old:
             action = agent.policy_old.act(t, img, memory)
-            new_img, reward, done, info = env.step(H.action_list[action].astype(np.intc))
+            new_img, reward, done, info = env.step(H.action_list[action])
 
 
             # Saving reward and is_terminal:

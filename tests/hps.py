@@ -52,13 +52,13 @@ HPARAMS_REGISTRY['ppo_none'] = ppo_none
 def parse_args_and_update_hparams(H, parser, s=None):
     args = parser.parse_args(s)
     valid_args = set(args.__dict__.keys())
-    hparam_sets = [x for x in args.hparam_sets.split(',') if x]
-    for hp_set in hparam_sets:
-        hps = HPARAMS_REGISTRY[hp_set]
-        for k in hps:
-            if k not in valid_args:
-                raise ValueError(f"{k} not in default args")
-        parser.set_defaults(**hps)
+    # hparam_sets = [x for x in args.hparam_sets.split(',') if x]
+    # for hp_set in hparam_sets:
+    #     hps = HPARAMS_REGISTRY[hp_set]
+    #     for k in hps:
+    #         if k not in valid_args:
+    #             raise ValueError(f"{k} not in default args")
+    #     parser.set_defaults(**hps)
     H.update(parser.parse_args(s).__dict__)
 
 
@@ -73,21 +73,22 @@ def add_arguments(parser):
 
     # model
     parser.add_argument('--model', type=str, default='vmpo', help='{vmpo|ppo}')
-    parser.add_argument('--state_rep', type=str, default='none', help='{none|lstm|trxl|gtrxl}')
-    parser.add_argument('--n_latent_var', type=int, default=64)
-    parser.add_argument('--n_layer', type=int, default=4)
-    parser.add_argument('--n_head', type=int, default=8)
+    parser.add_argument('--state_rep', type=str, default='gtrxl', help='{none|lstm|trxl|gtrxl}')
+    parser.add_argument('--n_latent_var', type=int, default=4)
+    parser.add_argument('--n_layer', type=int, default=1)
+    parser.add_argument('--n_head', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--mem_len', type=int, default=10)
+    parser.add_argument('--emb_size', type=int, default=8)
 
     # env
     parser.add_argument('--env_name', type=str, default='rooms_watermaze')
-    parser.add_argument('--action_dim', type=int, default=9)
+    parser.add_argument('--action_dim', type=int, default=2)
     parser.add_argument('--log_interval', type=int, default=40)
     parser.add_argument('--max_episodes', type=int, default=50000)
     parser.add_argument('--max_timesteps', type=int, default=300)
     parser.add_argument('--update_timestep', type=int, default=1200)
-    parser.add_argument('--action_list', type=list, default=[])
+    parser.add_argument('--action_list', type=list, default=[0, 1])
 
     # training
     parser.add_argument('--lr', type=float, default=0.001)

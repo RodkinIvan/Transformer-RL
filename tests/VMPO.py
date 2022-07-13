@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch.distributions import Categorical
 from model.encoder import Encoder
 
+from GTrXL.gtrxl import GTrXL
 
 class Memory:
     def __init__(self):
@@ -34,24 +35,29 @@ class StateRepresentation(nn.Module):
         self.action_dim = H.action_dim
         self.device = H.device
 
-        inp_dim = H.n_latent_var + H.action_dim + 1 # current state, previous action and reward
+        inp_dim = H.n_latent_var + H.action_dim + 1  # current state, previous action and reward
         out_dim = H.n_latent_var
 
-        self.resnet = Encoder()
+        self.resnet = lambda x: torch.tensor(x).to(H.device)
 
         if H.state_rep == 'lstm':
             self.layer = nn.LSTMCell(inp_dim, out_dim)
             self.h0 = nn.Parameter(torch.rand(H.n_latent_var))
             self.c0 = nn.Parameter(torch.rand(H.n_latent_var))
         elif H.state_rep == 'gtrxl':
-            raise NotImplemented
+            self.layer = GTrXL(
+                input_dim=inp_dim,
+                layer_num=H.n_layer,
+                head_num=H.n_head,
+                embedding_dim=H.emb_size
+            )
 
         self.init_action = nn.Parameter(torch.rand(H.action_dim))
         self.init_reward = nn.Parameter(torch.rand(1))
 
     def forward(self, t, img, _prev_action=None, _prev_reward=None):
 
-        img = torch.from_numpy(img).float().to(self.device).unsqueeze(0).permute(0,3,1,2)
+        # img = torch.from_numpy(img).float().to(self.device).unsqueeze(0).permute(0,3,1,2)
         state = self.resnet(img).squeeze()
 
         if self.state_rep == 'none':
@@ -83,9 +89,8 @@ class StateRepresentation(nn.Module):
         elif self.state_rep in ['trxl', 'gtrxl']:
             self.inputs.append(inp)
             _inputs = torch.stack(self.inputs, dim=0)
-            pred, _mems = self.layer(_inputs, *self.mems)
-            if t >= (1+self.H.mem_len):
-                self.mems = _mems
+            output = self.layer(_inputs)
+            pred = output['logit']
             return pred[0][0]
 
     def batch_forward(self, ts, images, actions, rewards):
@@ -109,7 +114,7 @@ class StateRepresentation(nn.Module):
                     prev_action = actions[i-1]
                     prev_reward = rewards[i-1]
 
-                if t==0:
+                if t == 0:
                     rep_states.append(self.forward(t, image))
                 else:
                     rep_states.append(self.forward(t, image, prev_action, prev_reward))
@@ -131,7 +136,7 @@ class ActorCritic(nn.Module):
 
         # actor
         self.action_layer = nn.Sequential(
-            nn.Linear(inp_dim, H.n_latent_var),
+            nn.Linear(H.emb_size, H.n_latent_var),
             nn.Tanh(),
             nn.Linear(H.n_latent_var, H.n_latent_var),
             nn.Tanh(),
@@ -141,7 +146,7 @@ class ActorCritic(nn.Module):
 
         # critic
         self.value_layer = nn.Sequential(
-            nn.Linear(inp_dim, H.n_latent_var),
+            nn.Linear(H.emb_size, H.n_latent_var),
             nn.Tanh(),
             nn.Linear(H.n_latent_var, H.n_latent_var),
             nn.Tanh(),
@@ -278,11 +283,9 @@ class VMPO:
                 self.eta.copy_(torch.clamp(self.eta, min=1e-8))
                 self.alpha.copy_(torch.clamp(self.alpha, min=1e-8))
 
-            #if i == self.K_epochs - 1:
-            #    print(torch.mean(KL).item(), self.alpha.item())
-
         # Copy new weights into old policy:
         self.policy_old.load_state_dict(self.policy.state_dict())
+
 
 class PPO:
     def __init__(self, H):
