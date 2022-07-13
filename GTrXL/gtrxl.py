@@ -3,6 +3,8 @@ import warnings
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+# from ding.torch_utils.network.nn_module import fc_block, build_normalization, F
 
 
 class PositionalEmbedding(nn.Module):
@@ -137,9 +139,7 @@ class Memory:
         Overview:
             Update the memory given a sequence of hidden states.
         Example for single layer:
-
             memory_len=3, hidden_size_len=2, bs=3
-
                 m00 m01 m02      h00 h01 h02              m20 m21 m22
             m = m10 m11 m12  h = h10 h11 h12  => new_m =  h00 h01 h02
                 m20 m21 m22                               h10 h11 h12
@@ -205,8 +205,8 @@ class AttentionXL(torch.nn.Module):
         self.project_pos = nn.Linear(input_dim, head_dim * head_num)  # project the positional embedding
         self.scale = 1 / (head_dim ** 0.5)  # for scaled dot product attention
 
-    @staticmethod
-    def _rel_shift(x: torch.Tensor, zero_upper: bool = False):
+
+    def _rel_shift(self, x: torch.Tensor, zero_upper: bool = False):
         """
         Overview:
             Relatively shift the attention score matrix.
@@ -229,7 +229,7 @@ class AttentionXL(torch.nn.Module):
         Returns:
             - x (:obj:`torch.Tensor`): input after relative shift. Shape (cur_seq, full_seq, bs, head_num).
         """
-        x_padded = torch.cat([torch.zeros(x.shape[0]), x], dim=1)  # step 1
+        x_padded = F.pad(x, [1, 0])  # step 1
         x_padded = x_padded.view(x.size(0), x.size(1), x.size(3) + 1, x.size(2))  # step 2
         x = x_padded[:, :, 1:].view_as(x)  # step 3
         if zero_upper:
@@ -290,7 +290,7 @@ class AttentionXL(torch.nn.Module):
             assert mask.shape[2:] == attn.shape[2:]  # check shape of mask
             attn = attn.masked_fill(mask, -float("inf")).type_as(attn)
 
-        attn = torch.softmax(attn, dim=-1)
+        attn = F.softmax(attn, dim=-1)
         attn = self.dropout(attn)
 
         # multiply softmax output by value
@@ -350,8 +350,8 @@ class GatedTransformerXLLayer(torch.nn.Module):
         for i in range(mlp_num):
             layers.append(nn.Sequential(
                 nn.Linear(dims[i], dims[i + 1]),
-                activation
-            ))
+                activation)
+            )
             if i != mlp_num - 1:
                 layers.append(self.dropout)
         layers.append(self.dropout)
@@ -398,7 +398,6 @@ class GTrXL(nn.Module):
     """
     Overview:
         GTrXL Transformer implementation.
-
     .. note::
         For details refer to Stabilizing Transformer for Reinforcement Learning: https://arxiv.org/abs/1910.06764
     """
@@ -475,7 +474,6 @@ class GTrXL(nn.Module):
         self.pos_embedding_dict = {}  # create a pos embedding for each different seq_len
 
     def reset_memory(self, batch_size: Optional[int] = None, state: Optional[torch.Tensor] = None):
-
         """
         Overview:
             Clear or set the memory of GTrXL.
@@ -483,16 +481,13 @@ class GTrXL(nn.Module):
             - batch_size (:obj:`Optional[int]`): batch size
             - state (:obj:`Optional[torch.Tensor]`): input memory. Shape is (layer_num, memory_len, bs, embedding_dim).
         """
-
         self.memory = Memory(memory_len=self.memory_len, layer_num=self.layer_num, embedding_dim=self.embedding_dim)
-
         if batch_size is not None:
             self.memory = Memory(self.memory_len, batch_size, self.embedding_dim, self.layer_num)
         elif state is not None:
             self.memory.init(state)
 
     def get_memory(self):
-
         """
         Overview:
             Returns memory of GTrXL.
@@ -533,7 +528,6 @@ class GTrXL(nn.Module):
                 )
             )
             self.reset_memory(bs)
-
         self.memory.to(x.device)
         memory = self.memory.get()
 
