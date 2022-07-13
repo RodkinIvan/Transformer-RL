@@ -52,9 +52,14 @@ class CoBERL(nn.Module):
     self.encoder = Encoder()
 
     self.gtrxl = GTrXL(input_dim=512,
-              head_dim=8,
-              embedding_dim=512,
-              layer_num=2)
+            head_dim=64,
+            embedding_dim=512,
+            head_num=8,
+            mlp_num=2,
+            layer_num=8,
+            memory_len=64,
+            activation=nn.GELU()
+    )
 
     self.gru = nn.GRU(input_size=512, hidden_size=512, num_layers=1)
     self.lstm = nn.LSTM(input_size=512, hidden_size=512, num_layers=1)
