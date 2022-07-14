@@ -152,27 +152,24 @@ def ResNet152(num_classes, channels=3):
 
 
 
-class Encoder(nn.Module):
-  def __init__(self):
-    super(Encoder, self).__init__()
-    self.resnet47 = ResNet47(512)
-    # self.fc1 = nn.Linear(in_features=None, out_features=512)
-    self.relu = nn.ReLU()
-    self.fc2 = nn.Linear(in_features=512, out_features=448)
+class VisualEncoder(nn.Module):
+    def __init__(self):
+        super(VisualEncoder, self).__init__()
+        self.resnet47 = ResNet47(512)
+        self.relu = nn.ReLU()
+        self.fc1 = nn.Linear(in_features=512, out_features=448)
 
-    # self.fc3 = nn.Linear(in_features=None, out_features=64)
+    def forward(self, img, prev_rewards_encoded_actions):
+        x = self.resnet47(img)
+        x = self.relu(x)
+        x = self.fc1(x)
+        x = self.relu(x)
 
-  def forward(self, x, prev_reward, encoded_action):
-    x = self.resnet47(x)
-    # x = nn.Linear(in_features=x.shape[0], out_features=512)
-    x = self.relu(x)
-    x = self.fc2(x)
-    x = self.relu(x)
+        y = nn.Linear(in_features=prev_rewards_encoded_actions.shape[1], out_features=64)(prev_rewards_encoded_actions)
+        y = self.relu(y)
+        print(y.shape, x.shape)
+        return torch.concat((y, x), dim=1)
 
-    y = prev_reward.concat(encoded_action)
-    y = nn.Linear(in_features=y.shape[0], out_features=64)
-    y = self.relu(y)
-    return y.concat(x)
 
 if __name__ == "__main__":
   resnet47 = ResNet47(2048)
