@@ -12,82 +12,147 @@ from torch import nn
 from torchvision import models
 
 import torch
-import torch.nn as  nn
+import torch.nn as nn
+from torch.nn import KLDivLoss
 import torch.nn.functional as F
+from Transformer_RL.model.encoder import VisualEncoder
+from Transformer_RL.GTrXL.gtrxl import GTrXL
 
-# !rm -r Transformer-RL/
+# !rm -r Transformer_RL/
 # !git clone -b dev https://github.com/RodkinIvan/Transformer-RL
 
 # Commented out IPython magic to ensure Python compatibility.
-# %cd Transformer-RL/
+# %cd Transformer_RL/
 
 # !ls
 
-from model.encoder import ResNet47
-from GTrXL.gtrxl import GTrXL
-
-class Encoder(nn.Module):
-  def __init__(self):
-    super(Encoder, self).__init__()
-    self.resnet47 = ResNet47(512)
-    self.relu = nn.ReLU()
-    self.fc1 = nn.Linear(in_features=512, out_features=448)
-
-  def forward(self, img, encoded):
-    x = self.resnet47(img)
-    x = self.relu(x)
-    x = self.fc1(x)
-    x = self.relu(x)
+from Transformer_RL.GTrXL.gtrxl import GTrXL
 
 
-    y = nn.Linear(in_features=encoded.shape[1], out_features=64)(encoded)
-    y = self.relu(y)
-    print(y.shape, x.shape)
-    return torch.concat((y, x), dim=1).reshape((1, 1, 512))
+class ValueNetwork(nn.Module):
+    def __init__(self):
+        super(ValueNetwork, self).__init__()
+        self.fc1 = nn.Linear(1024, 512)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(512, 30)
+        self.fc3 = nn.Linear(30, 1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        return x
 
 
 class CoBERL(nn.Module):
-  def __init__(self):
-    super(CoBERL, self).__init__()
-    self.encoder = Encoder()
+    def __init__(self, constrastive_loss=None, contrastive_mask_rate=None):
+        super(CoBERL, self).__init__()
+        self.encoder = VisualEncoder()
 
-    self.gtrxl = GTrXL(input_dim=512,
-            head_dim=64,
-            embedding_dim=512,
-            head_num=8,
-            mlp_num=2,
-            layer_num=8,
-            memory_len=64,
-            activation=nn.GELU()
-    )
+        self.gtrxl = GTrXL(input_dim=512,
+                           head_dim=64,
+                           embedding_dim=512,
+                           head_num=8,
+                           mlp_num=2,
+                           layer_num=8,
+                           memory_len=64,
+                           activation=nn.GELU()
+                           )
 
-    self.gru = nn.GRU(input_size=512, hidden_size=512, num_layers=1)
-    self.lstm = nn.LSTM(input_size=512, hidden_size=512, num_layers=1)
+        self.gru = nn.GRU(input_size=512, hidden_size=512, num_layers=1, bias=True)
+        self.lstm = nn.LSTM(input_size=512, hidden_size=512, num_layers=1)
+        self.v_head = ValueNetwork()
 
+    def create_masks_targets(self, input, perc=0.15, token=0):
+        mask = input.ge(perc)
+        masked = input * mask
+        return masked, input, mask
 
-  def forward(self, input, prev_reward_action=None):
-    # The previous reward and one-hot encoded action are concatenated and projected
-    # with a linear layer into a 64-dimensional vector
-    if prev_reward_action is None:
-      prev_reward_action = torch.rand(size=(1, 64))
+    def compute_aux_loss(self, input1, input2, mask_ext):
+        print(input1.shape)
+        batch_size, seq_dim, feat_dim = input1.shape
+        input1 = torch.reshape(input1, shape=(-1, feat_dim))
+        input2 = torch.reshape(input2, shape=(-1, feat_dim))
 
-    y = self.encoder(input, prev_reward_action)
-    print("fully encoded", y.shape)
-    x = self.gtrxl(y)['logit'].reshape((1, 512))
-    y = y.reshape((1, 512))
-    print("x y ", x.shape, y.shape)
-    z, h_n = self.gru(y, x)
-    print("GRU", z.shape)
-    out, (h_n, c_n) = self.lstm(z)
-    print('lstm', out.shape, y.shape)
-    v_input = torch.concat((out, y), dim=1).flatten()
-    print('concat', v_input.shape)
-    return v_input
+        input1 = F.normalize(input1, p=2)  # l2_normalize(input1, axis=-1)
+        input2 = F.normalize(input2, p=2)  # l2_normalize(input2, axis=-1)
 
+        # Compute labels index
+        labels_idx = torch.arange(start=0, end=input1.shape[0])
+        # labels_idx = labels_idx.astype(jnp.int32)
+        # Compute pseudo-labels for contrastive loss.
+        labels = F.one_hot(labels_idx, input1.shape[0] * 2)
+        # Mask out the same image pair.
+        mask = F.one_hot(labels_idx, input1.shape[0])
+        # Compute logits.
+        logits_11 = torch.matmul(input1, input1.T)
+        logits_22 = torch.matmul(input2, input2.T)
+        logits_12 = torch.matmul(input1, input2.T)
+        logits_21 = torch.matmul(input2, input1.T)
+
+        # Calculate invariance penalty.
+        kl_div = KLDivLoss(reduction="batchmean")
+        inv_penalty = kl_div(logits_11.detach(), logits_22)
+        inv_penalty += kl_div(logits_12.detach(), logits_22)
+        inv_penalty += kl_div(logits_21.detach(), logits_11)
+        inv_penalty += kl_div(logits_12.detach(), logits_21)
+        inv_penalty = inv_penalty / 4.  # [B * T]
+
+        logits_11 = logits_11 - mask * 1e9
+        logits_22 = logits_22 - mask * 1e9
+
+        logits_1211 = torch.concat((logits_12, logits_11))
+        logits_2122 = torch.concat((logits_21, logits_22))
+
+        loss_12 = -torch.sum(labels * F.log_softmax(logits_1211, dim=-1))
+        loss_21 = -torch.sum(labels * F.log_softmax(logits_2122, dim=-1))
+        print(loss_12.shape, mask_ext.shape)
+        loss = torch.reshape(loss_12 + loss_21, [batch_size, seq_dim]) * mask_ext
+        inv_penalty = torch.reshape(inv_penalty, [batch_size, seq_dim]) * mask_ext
+
+        loss = torch.mean(loss + inv_penalty)
+
+        return loss
+
+    def forward(self, sampled_batch, previous_rewards=None, encoded_actions=None):
+        # The previous reward and one-hot encoded action are concatenated and projected
+        # with a linear layer into a 64-dimensional vector
+        encoded_actions = F.one_hot(sampled_batch.long())
+        prev_reward_action = torch.rand(size=(1, 64)) if None in [previous_rewards, encoded_actions] else torch.concat(
+            (previous_rewards, encoded_actions))
+
+        y = self.encoder(sampled_batch, prev_reward_action).reshape((1,1,512))
+        print("fully encoded", y.shape)
+
+        transformer_inputs, transformer_targets, mask = self.create_masks_targets(y, perc=0.15, token=0)
+        print('transformer_inputs', transformer_inputs.shape, transformer_targets.shape, mask.shape)
+        output_transformer_contrastive = self.gtrxl(transformer_inputs)['logit']  # .reshape((1, 512))
+        contrastive_loss = self.compute_aux_loss(output_transformer_contrastive.reshape((1, 1, 512)),
+                                                 transformer_targets.reshape((1, 1, 512)), mask.reshape((1, 1, 512)))
+        x = self.gtrxl(transformer_inputs)['logit'].reshape((1, 512))
+
+        # x = self.gtrxl(y)['logit'].reshape((1, 512))
+        y = y.reshape((1, 512))
+        print("x y ", x.shape, y.shape)
+        z, h_n = self.gru(y, x)
+        print("GRU", z.shape)
+        out, (h_n, c_n) = self.lstm(z)
+        print('lstm', out.shape, y.shape)
+        v_input = torch.concat((out, y), dim=1).flatten()
+        print('concat', v_input.shape)
+
+        value_estimation = self.v_head(v_input)
+        rl_loss = 0  # compute_rl_loss(value_estimation, extra_args)
+        total_loss = contrastive_loss  # + rl_loss
+
+        return value_estimation, total_loss
 
 
 if __name__ == "__main__":
   model = CoBERL()
   input = torch.rand(size=(1, 3, 240, 240))
-  output = model(input)
-  output
+  v_estimation, loss = model(input)
+  loss.backward()
+  print(v_estimation.shape)
