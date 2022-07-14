@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from torch.distributions import Categorical
-from model.encoder import Encoder
+from model.encoder import VisualEncoder
 
 from GTrXL.gtrxl import GTrXL
 
@@ -89,9 +89,11 @@ class StateRepresentation(nn.Module):
             return h[0]
         elif self.state_rep in ['trxl', 'gtrxl']:
             self.inputs.append(inp)
+            if len(self.inputs) > self.H.mem_len:
+                self.inputs.pop(0)
             _inputs = torch.stack(self.inputs, dim=0)
             # output = self.layer(_inputs)
-            output = self.layer(torch.tensor(_inputs))
+            output = self.layer(_inputs)
             pred = output['logit']
             return pred[-1][0]
 

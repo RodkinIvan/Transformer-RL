@@ -78,7 +78,7 @@ def add_arguments(parser):
     parser.add_argument('--n_layer', type=int, default=1)
     parser.add_argument('--n_head', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.0)
-    parser.add_argument('--mem_len', type=int, default=10)
+    parser.add_argument('--mem_len', type=int, default=20)
     parser.add_argument('--emb_size', type=int, default=8)
 
     # env
@@ -87,7 +87,7 @@ def add_arguments(parser):
     parser.add_argument('--action_dim', type=int, default=2)
     parser.add_argument('--log_interval', type=int, default=40)
     parser.add_argument('--max_episodes', type=int, default=5000)
-    parser.add_argument('--max_timesteps', type=int, default=300)
+    parser.add_argument('--max_timesteps', type=int, default=1000)
     parser.add_argument('--update_timestep', type=int, default=1200)
     parser.add_argument('--action_list', type=list, default=[0, 1])
 
