@@ -2,7 +2,7 @@ from VMPO import Memory, VMPO, PPO
 from hps import set_up_hyperparams
 import gym
 import wandb
-
+import torch
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
             timestep += 1
 
             # img = torch.cat((torch.asarray(img), torch.asarray([0])), dim=0)
-            img = torch.asarray(img)
+            img = torch.asarray(img).to(H.device)
 
             # Running policy_old:
             action = agent.policy_old.act(t, img, memory)

@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 from torch.nn import KLDivLoss
 import torch.nn.functional as F
-from Transformer_RL.model.encoder import VisualEncoder
-from Transformer_RL.GTrXL.gtrxl import GTrXL
+from model.encoder import VisualEncoder
+from GTrXL.gtrxl import GTrXL
 
 # !rm -r Transformer_RL/
 # !git clone -b dev https://github.com/RodkinIvan/Transformer-RL
@@ -26,7 +26,7 @@ from Transformer_RL.GTrXL.gtrxl import GTrXL
 
 # !ls
 
-from Transformer_RL.GTrXL.gtrxl import GTrXL
+from GTrXL.gtrxl import GTrXL
 
 
 class ValueNetwork(nn.Module):
@@ -49,7 +49,8 @@ class ValueNetwork(nn.Module):
 
 
 class CoBERL(nn.Module):
-    def __init__(self, input_dim=512,
+    def __init__(self, H,
+                       input_dim=512,
                        head_dim=64,
                        embedding_dim=512,
                        head_num=8,
@@ -79,7 +80,10 @@ class CoBERL(nn.Module):
         self.lstm = nn.LSTM(input_size=self.embedding_dim, hidden_size=self.embedding_dim, num_layers=1)
         self.v_head = ValueNetwork(out_dim)
 
-    def create_masks_targets(self, input, perc=0.15, token=0):
+        self.H = H
+
+    @staticmethod
+    def create_masks_targets(input, perc=0.15, token=0):
         mask = input.ge(perc)
         masked = input * mask
         return masked, input, mask
@@ -97,9 +101,9 @@ class CoBERL(nn.Module):
         labels_idx = torch.arange(start=0, end=input1.shape[0])
         # labels_idx = labels_idx.astype(jnp.int32)
         # Compute pseudo-labels for contrastive loss.
-        labels = F.one_hot(labels_idx, input1.shape[0] * 2)
+        labels = F.one_hot(labels_idx, input1.shape[0] * 2).to(self.H.device)
         # Mask out the same image pair.
-        mask = F.one_hot(labels_idx, input1.shape[0])
+        mask = F.one_hot(labels_idx, input1.shape[0]).to(self.H.device)
 
         # Compute logits.
         logits_11 = torch.matmul(input1, input1.T)

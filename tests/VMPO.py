@@ -3,9 +3,9 @@ import numpy as np
 import torch.nn as nn
 from torch.distributions import Categorical
 
-from Transformer_RL.GTrXL.gtrxl import GTrXL
-from Transformer_RL.model.model import CoBERL
-from Transformer_RL.model.encoder import StateEncoder
+from GTrXL.gtrxl import GTrXL
+from model.model import CoBERL
+from model.encoder import StateEncoder
 
 
 class Memory:
@@ -40,7 +40,7 @@ class StateRepresentation(nn.Module):
         inp_dim = H.state_dim + H.action_dim + 1  # current state, previous action and reward
         out_dim = H.emb_size
 
-        self.resnet = StateEncoder(H.n_latent_var, 512 - H.action_dim - 1) #lambda x: torch.tensor(x).to(H.device)
+        self.resnet = StateEncoder(H.state_dim, 512 - H.action_dim - 1) #lambda x: torch.tensor(x).to(H.device)
 
         if H.state_rep == 'lstm':
             self.layer = nn.LSTMCell(inp_dim, out_dim)
@@ -55,6 +55,7 @@ class StateRepresentation(nn.Module):
             )
         elif H.state_rep == 'coberl':
             self.layer = CoBERL(
+                H=H,
                 input_dim=512,
                 head_dim=64,
                 embedding_dim=512,

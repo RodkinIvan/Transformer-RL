@@ -69,7 +69,7 @@ def add_arguments(parser):
     parser.add_argument('--save_dir', type=str, default='./saved_models')
     parser.add_argument('--desc', type=str, default='test')
     parser.add_argument('--hparam_sets', '--hps', type=str)
-    parser.add_argument('--cpu', type=str, default='0')
+    parser.add_argument('--gpu', type=str, default='0')
 
     # model
     parser.add_argument('--model', type=str, default='vmpo', help='{vmpo|ppo}')
