@@ -40,13 +40,15 @@ class StateRepresentation(nn.Module):
         inp_dim = H.state_dim + H.action_dim + 1  # current state, previous action and reward
         out_dim = H.emb_size
 
-        self.resnet = StateEncoder(H.state_dim, 512 - H.action_dim - 1) #lambda x: torch.tensor(x).to(H.device)
+
 
         if H.state_rep == 'lstm':
+            self.resnet = StateEncoder(H.state_dim, 512 - H.action_dim - 1)
             self.layer = nn.LSTMCell(inp_dim, out_dim)
             self.h0 = nn.Parameter(torch.rand(out_dim))
             self.c0 = nn.Parameter(torch.rand(out_dim))
         elif H.state_rep == 'gtrxl':
+            self.resnet = lambda x: torch.tensor(x).to(H.device)
             self.layer = GTrXL(
                 input_dim=inp_dim,
                 layer_num=H.n_layer,
@@ -54,6 +56,7 @@ class StateRepresentation(nn.Module):
                 embedding_dim=out_dim
             )
         elif H.state_rep == 'coberl':
+            self.resnet = StateEncoder(H.state_dim, 512 - H.action_dim - 1)
             self.layer = CoBERL(
                 H=H,
                 input_dim=512,
@@ -301,7 +304,6 @@ class VMPO:
             L_alpha = torch.mean(self.alpha*(self.eps_alpha-KL.detach())+self.alpha.detach()*KL)
 
             loss = L_pi + L_eta + L_alpha + 0.5*self.MseLoss(state_values, rewards)
-
             # Take gradient step
             self.optimizer.zero_grad()
             loss.mean().backward()

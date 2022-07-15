@@ -10,7 +10,7 @@ def main():
 
     H, logprint = set_up_hyperparams()
 
-    env = gym.make('CartPole-v1')
+    env = gym.make(H.env_name)
 
     H.img_size = 64
     H.device = 'cuda:' + H.gpu if H.gpu is not None else 'cpu'

@@ -73,7 +73,7 @@ def add_arguments(parser):
 
     # model
     parser.add_argument('--model', type=str, default='vmpo', help='{vmpo|ppo}')
-    parser.add_argument('--state_rep', type=str, default='coberl', help='{none|lstm|trxl|gtrxl}')
+    parser.add_argument('--state_rep', type=str, default='gtrxl', help='{none|lstm|trxl|gtrxl}')
     parser.add_argument('--n_latent_var', type=int, default=10)
     parser.add_argument('--n_layer', type=int, default=1)
     parser.add_argument('--n_head', type=int, default=1)
@@ -86,9 +86,9 @@ def add_arguments(parser):
     parser.add_argument('--state_dim', type=int, default=4)
     parser.add_argument('--action_dim', type=int, default=2)
     parser.add_argument('--log_interval', type=int, default=40)
-    parser.add_argument('--max_episodes', type=int, default=5000)
+    parser.add_argument('--max_episodes', type=int, default=3000)
     parser.add_argument('--max_timesteps', type=int, default=1000)
-    parser.add_argument('--update_timestep', type=int, default=50)
+    parser.add_argument('--update_timestep', type=int, default=600)
     parser.add_argument('--action_list', type=list, default=[0, 1])
 
     # training
