@@ -82,13 +82,13 @@ def add_arguments(parser):
     parser.add_argument('--emb_size', type=int, default=8)
 
     # env
-    parser.add_argument('--env_name', type=str, default='rooms_watermaze')
+    parser.add_argument('--env_name', type=str, default='CartPole-v1')
     parser.add_argument('--state_dim', type=int, default=4)
     parser.add_argument('--action_dim', type=int, default=2)
     parser.add_argument('--log_interval', type=int, default=40)
     parser.add_argument('--max_episodes', type=int, default=5000)
     parser.add_argument('--max_timesteps', type=int, default=1000)
-    parser.add_argument('--update_timestep', type=int, default=1200)
+    parser.add_argument('--update_timestep', type=int, default=50)
     parser.add_argument('--action_list', type=list, default=[0, 1])
 
     # training
