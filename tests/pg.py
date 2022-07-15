@@ -62,7 +62,7 @@ def attempt(state, policy):
     return state, action, sampler
 
 
-wandb.init(project='Transformer-RL', entity='irodkin')
+wandb.init(project='Transformer_RL', entity='irodkin')
 # create environment
 env = gym.make("CartPole-v1")
 # instantiate the policy

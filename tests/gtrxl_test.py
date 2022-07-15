@@ -4,6 +4,7 @@ import gym
 import wandb
 
 
+
 def main():
     wandb.init(project='Transformer-RL', entity='irodkin')
 
@@ -30,6 +31,9 @@ def main():
         img = env.reset()
         for t in range(H.max_timesteps):
             timestep += 1
+
+            # img = torch.cat((torch.asarray(img), torch.asarray([0])), dim=0)
+            img = torch.asarray(img)
 
             # Running policy_old:
             action = agent.policy_old.act(t, img, memory)
