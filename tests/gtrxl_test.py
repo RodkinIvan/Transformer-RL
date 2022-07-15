@@ -1,13 +1,12 @@
-import os
-import torch
-import numpy as np
 from VMPO import Memory, VMPO, PPO
 from hps import set_up_hyperparams
 import gym
+import wandb
 
 
 
 def main():
+    wandb.init(project='Transformer-RL', entity='irodkin')
 
     H, logprint = set_up_hyperparams()
 
@@ -59,6 +58,9 @@ def main():
 
         avg_length += t
 
+
+        wandb.log({'Avg reward': running_reward})
+        running_reward = 0
         # Logging
         if i_episode % H.log_interval == 0:
             avg_length = int(avg_length / H.log_interval)
@@ -66,6 +68,7 @@ def main():
 
             logprint(model=H.desc, type='tr_loss', episodes=i_episode,
                      **{'avg_length': avg_length, 'running_reward': running_reward})
+
             running_reward = 0
             avg_length = 0
 

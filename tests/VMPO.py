@@ -7,6 +7,7 @@ from Transformer_RL.GTrXL.gtrxl import GTrXL
 from Transformer_RL.model.model import CoBERL
 from Transformer_RL.model.encoder import StateEncoder
 
+
 class Memory:
     def __init__(self):
         self.ts = []
@@ -36,21 +37,21 @@ class StateRepresentation(nn.Module):
         self.action_dim = H.action_dim
         self.device = H.device
 
-        inp_dim = H.n_latent_var + H.action_dim + 1  # current state, previous action and reward
-        out_dim = H.n_latent_var
+        inp_dim = H.state_dim + H.action_dim + 1  # current state, previous action and reward
+        out_dim = H.emb_size
 
         self.resnet = StateEncoder(H.n_latent_var, 512 - H.action_dim - 1) #lambda x: torch.tensor(x).to(H.device)
 
         if H.state_rep == 'lstm':
             self.layer = nn.LSTMCell(inp_dim, out_dim)
-            self.h0 = nn.Parameter(torch.rand(H.n_latent_var))
-            self.c0 = nn.Parameter(torch.rand(H.n_latent_var))
+            self.h0 = nn.Parameter(torch.rand(out_dim))
+            self.c0 = nn.Parameter(torch.rand(out_dim))
         elif H.state_rep == 'gtrxl':
             self.layer = GTrXL(
                 input_dim=inp_dim,
                 layer_num=H.n_layer,
                 head_num=H.n_head,
-                embedding_dim=H.emb_size
+                embedding_dim=out_dim
             )
         elif H.state_rep == 'coberl':
             self.layer = CoBERL(
@@ -100,11 +101,14 @@ class StateRepresentation(nn.Module):
             return h[0]
         elif self.state_rep in ['trxl', 'gtrxl']:
             self.inputs.append(inp)
+            if len(self.inputs) > self.H.mem_len:
+                self.inputs.pop(0)
             _inputs = torch.stack(self.inputs, dim=0)
+            # output = self.layer(_inputs)
             output = self.layer(_inputs)
 
             pred = output['logit']
-            return pred[0][0]
+            return pred[-1][0]
         elif self.state_rep == 'coberl':
             self.inputs.append(inp)
             #_inputs = torch.stack(self.inputs, dim=0)
@@ -113,6 +117,7 @@ class StateRepresentation(nn.Module):
             value_estimation, contrastive_loss = self.layer(inp)
 
             return value_estimation
+            
 
     def batch_forward(self, ts, images, actions, rewards):
 
@@ -153,11 +158,11 @@ class ActorCritic(nn.Module):
         self.model = model
         self.device = H.device
         self.state_rep = H.state_rep
-        inp_dim = H.n_latent_var
+        inp_dim = H.emb_size
 
         # actor
         self.action_layer = nn.Sequential(
-            nn.Linear(H.emb_size, H.n_latent_var),
+            nn.Linear(inp_dim, H.n_latent_var),
             nn.Tanh(),
             nn.Linear(H.n_latent_var, H.n_latent_var),
             nn.Tanh(),
@@ -167,7 +172,7 @@ class ActorCritic(nn.Module):
 
         # critic
         self.value_layer = nn.Sequential(
-            nn.Linear(H.emb_size, H.n_latent_var),
+            nn.Linear(inp_dim, H.n_latent_var),
             nn.Tanh(),
             nn.Linear(H.n_latent_var, H.n_latent_var),
             nn.Tanh(),
