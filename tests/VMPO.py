@@ -3,9 +3,9 @@ import numpy as np
 import torch.nn as nn
 from torch.distributions import Categorical
 
-from GTrXL.gtrxl import GTrXL
-from model.model import CoBERL
-from model.encoder import StateEncoder
+from Transformer_RL.GTrXL.gtrxl import GTrXL
+from Transformer_RL.model.model import CoBERL
+from Transformer_RL.model.encoder import StateEncoder
 
 
 class Memory:
@@ -36,11 +36,14 @@ class StateRepresentation(nn.Module):
         self.state_rep = H.state_rep
         self.action_dim = H.action_dim
         self.device = H.device
-
         inp_dim = H.state_dim + H.action_dim + 1  # current state, previous action and reward
         out_dim = H.emb_size
 
-        self.resnet = StateEncoder(H.state_dim, 512 - H.action_dim - 1) #lambda x: torch.tensor(x).to(H.device)
+        # encoder_out_dim = out_dim + H.action_dim + 1
+        # encoder_out_dim += encoder_out_dim % 2
+
+        self.resnet = StateEncoder(H.state_dim,
+                                   H.state_dim + (H.action_dim + 1) % 2)  # lambda x: torch.tensor(x).to(H.device)
 
         if H.state_rep == 'lstm':
             self.layer = nn.LSTMCell(inp_dim, out_dim)
@@ -56,9 +59,9 @@ class StateRepresentation(nn.Module):
         elif H.state_rep == 'coberl':
             self.layer = CoBERL(
                 H=H,
-                input_dim=512,
-                head_dim=64,
-                embedding_dim=512,
+                input_dim=H.emb_size,
+                head_dim=128,
+                embedding_dim=out_dim,
                 head_num=H.n_head,
                 mlp_num=2,
                 layer_num=H.n_layer,
@@ -112,19 +115,18 @@ class StateRepresentation(nn.Module):
             return pred[-1][0]
         elif self.state_rep == 'coberl':
             self.inputs.append(inp)
-            #_inputs = torch.stack(self.inputs, dim=0)
+            # _inputs = torch.stack(self.inputs, dim=0)
             # value_estimation, contrastive_loss  = self.layer(_inputs)
-            #inp = torch.reshape()
+            # inp = torch.reshape()
             value_estimation, contrastive_loss = self.layer(inp)
 
             return value_estimation
-            
 
     def batch_forward(self, ts, images, actions, rewards):
 
         if self.state_rep == 'none':
             images = np.array(images)
-            images = torch.from_numpy(images).float().to(self.device).permute(0,3,1,2)
+            images = torch.from_numpy(images).float().to(self.device).permute(0, 3, 1, 2)
             rep_states = self.resnet(images).squeeze()
         else:
             rep_states = []
@@ -138,8 +140,8 @@ class StateRepresentation(nn.Module):
                     prev_action = None
                     prev_reward = None
                 else:
-                    prev_action = actions[i-1]
-                    prev_reward = rewards[i-1]
+                    prev_action = actions[i - 1]
+                    prev_reward = rewards[i - 1]
 
                 if t == 0:
                     rep_states.append(self.forward(t, image))
@@ -149,7 +151,6 @@ class StateRepresentation(nn.Module):
             rep_states = torch.stack(rep_states, dim=0)
 
         return rep_states
-
 
 
 class ActorCritic(nn.Module):
@@ -288,19 +289,20 @@ class VMPO:
             # Get samples with top half advantages
             advprobs = torch.stack((advantages, logprobs))
             advprobs = advprobs[:, torch.sort(advprobs[0], descending=True).indices]
-            good_advantages = advprobs[0, :len(old_states)//2]
-            good_logprobs = advprobs[1, :len(old_states)//2]
+            good_advantages = advprobs[0, :len(old_states) // 2]
+            good_logprobs = advprobs[1, :len(old_states) // 2]
 
             # Get losses
-            phis = torch.exp(good_advantages/self.eta.detach())/torch.sum(torch.exp(good_advantages/self.eta.detach()))
-            L_pi = -phis*good_logprobs
-            L_eta = self.eta*self.eps_eta+self.eta*torch.log(torch.mean(torch.exp(good_advantages/self.eta)))
+            phis = torch.exp(good_advantages / self.eta.detach()) / torch.sum(
+                torch.exp(good_advantages / self.eta.detach()))
+            L_pi = -phis * good_logprobs
+            L_eta = self.eta * self.eps_eta + self.eta * torch.log(torch.mean(torch.exp(good_advantages / self.eta)))
 
             KL = self.get_KL(old_dist_probs.detach(), torch.log(old_dist_probs).detach(), torch.log(dist_probs))
 
-            L_alpha = torch.mean(self.alpha*(self.eps_alpha-KL.detach())+self.alpha.detach()*KL)
+            L_alpha = torch.mean(self.alpha * (self.eps_alpha - KL.detach()) + self.alpha.detach() * KL)
 
-            loss = L_pi + L_eta + L_alpha + 0.5*self.MseLoss(state_values, rewards)
+            loss = L_pi + L_eta + L_alpha + 0.5 * self.MseLoss(state_values, rewards)
 
             # Take gradient step
             self.optimizer.zero_grad()
@@ -366,8 +368,9 @@ class PPO:
 
             # Finding Surrogate Loss:
             surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
-            loss = -torch.min(surr1, surr2).unsqueeze(-1) + 0.5*self.MseLoss(state_values, rewards) - 0.01*dist_entropy
+            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
+            loss = -torch.min(surr1, surr2).unsqueeze(-1) + 0.5 * self.MseLoss(state_values,
+                                                                               rewards) - 0.01 * dist_entropy
 
             # take gradient step
             self.optimizer.zero_grad()

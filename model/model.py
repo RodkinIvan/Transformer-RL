@@ -7,16 +7,12 @@ Original file is located at
     https://colab.research.google.com/drive/144tOCZVfDs31GTa72p-_BGappRR63LH9
 """
 
-import torch
-from torch import nn
-from torchvision import models
 
 import torch
 import torch.nn as nn
 from torch.nn import KLDivLoss
 import torch.nn.functional as F
-from model.encoder import VisualEncoder
-from GTrXL.gtrxl import GTrXL
+from Transformer_RL.model.encoder import VisualEncoder
 
 # !rm -r Transformer_RL/
 # !git clone -b dev https://github.com/RodkinIvan/Transformer-RL
@@ -26,13 +22,13 @@ from GTrXL.gtrxl import GTrXL
 
 # !ls
 
-from GTrXL.gtrxl import GTrXL
+from Transformer_RL.GTrXL.gtrxl import GTrXL
 
 
 class ValueNetwork(nn.Module):
-    def __init__(self, out_dim):
+    def __init__(self, input_dim, out_dim):
         super(ValueNetwork, self).__init__()
-        self.fc1 = nn.Linear(1024, 512)
+        self.fc1 = nn.Linear(input_dim, 512)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(512, 30)
         self.fc3 = nn.Linear(30, out_dim)
@@ -75,10 +71,10 @@ class CoBERL(nn.Module):
                            activation=activation
                            )
 
-        self.critic_function = nn.Linear(self.input_dim, 512)
+        self.critic_function = nn.Linear(embedding_dim, self.input_dim)
         self.gru = nn.GRU(input_size=self.embedding_dim, hidden_size=self.embedding_dim, num_layers=1, bias=True)
         self.lstm = nn.LSTM(input_size=self.embedding_dim, hidden_size=self.embedding_dim, num_layers=1)
-        self.v_head = ValueNetwork(out_dim)
+        self.v_head = ValueNetwork(2*out_dim, out_dim)
 
         self.H = H
 
@@ -149,17 +145,17 @@ class CoBERL(nn.Module):
 
         transformer_inputs, transformer_targets, mask = self.create_masks_targets(y, perc=0.15, token=0)
         # print('transformer_inputs', transformer_inputs.shape, transformer_targets.shape, mask.shape)
-        output_transformer_contrastive = self.gtrxl(transformer_inputs.reshape((1, 1, self.embedding_dim)))['logit']
+        output_transformer_contrastive = self.gtrxl(transformer_inputs.reshape((1, 1, self.input_dim)))['logit']
 
         output_transformer_contrastive = self.critic_function(output_transformer_contrastive)
         transformer_targets = self.critic_function(transformer_targets)
 
         contrastive_loss = self.compute_aux_loss(output_transformer_contrastive,
                                                  transformer_targets, mask)
-        x = self.gtrxl(transformer_inputs.reshape((1, 1, self.embedding_dim)))['logit']
+        x = self.gtrxl(transformer_inputs.reshape((1, 1, self.input_dim)))['logit']
 
         # x = self.gtrxl(y)['logit'].reshape((1, 512))
-        y = y.reshape((1, 1, self.embedding_dim))
+        y = y.reshape((1, 1, self.input_dim))
         # print("x y ", x.shape, y.shape)
         z, h_n = self.gru(y, x)
         # print("GRU", z.shape)
