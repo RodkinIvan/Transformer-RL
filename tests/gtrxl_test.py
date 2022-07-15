@@ -3,8 +3,8 @@ import torch
 import numpy as np
 from VMPO import Memory, VMPO, PPO
 from hps import set_up_hyperparams
-import gym_deepmindlab
 import gym
+
 
 
 def main():
@@ -32,6 +32,9 @@ def main():
         img = env.reset()
         for t in range(H.max_timesteps):
             timestep += 1
+
+            # img = torch.cat((torch.asarray(img), torch.asarray([0])), dim=0)
+            img = torch.asarray(img)
 
             # Running policy_old:
             action = agent.policy_old.act(t, img, memory)

@@ -170,6 +170,16 @@ class VisualEncoder(nn.Module):
         print(y.shape, x.shape)
         return torch.concat((y, x), dim=1)
 
+class StateEncoder(nn.Module):
+    def __init__(self, input_dim, out_dim):
+        super(StateEncoder, self).__init__()
+        self.fc1 = nn.Linear(in_features=input_dim, out_features=out_dim)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        # x = self.relu(x)
+
+        return x
 
 if __name__ == "__main__":
   resnet47 = ResNet47(2048)
@@ -177,9 +187,6 @@ if __name__ == "__main__":
   output = resnet47(input)
   output
 
-    # model = ResNet50(448)
-    # l = [module for module in model.modules() if not isinstance(module, nn.Sequential)]
-    # len(l)
 
 
 
