@@ -9,10 +9,6 @@ Original file is located at
 
 
 import torch
-from torch import nn
-from torchvision import models
-
-import torch
 import torch.nn as  nn
 import torch.nn.functional as F
 
