@@ -30,12 +30,12 @@ from Transformer_RL.GTrXL.gtrxl import GTrXL
 
 
 class ValueNetwork(nn.Module):
-    def __init__(self):
+    def __init__(self, out_dim):
         super(ValueNetwork, self).__init__()
         self.fc1 = nn.Linear(1024, 512)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(512, 30)
-        self.fc3 = nn.Linear(30, 1)
+        self.fc3 = nn.Linear(30, out_dim)
 
     def forward(self, x):
         x = self.fc1(x)
@@ -43,27 +43,41 @@ class ValueNetwork(nn.Module):
         x = self.fc2(x)
         x = self.relu(x)
         x = self.fc3(x)
+        # x = self.relu(x)
         return x
 
 
-class CoBERL(nn.Module):
-    def __init__(self, constrastive_loss=None, contrastive_mask_rate=None):
-        super(CoBERL, self).__init__()
-        self.encoder = VisualEncoder()
 
-        self.gtrxl = GTrXL(input_dim=512,
-                           head_dim=64,
-                           embedding_dim=512,
-                           head_num=8,
-                           mlp_num=2,
-                           layer_num=8,
-                           memory_len=64,
-                           activation=nn.GELU()
+class CoBERL(nn.Module):
+    def __init__(self, input_dim=512,
+                       head_dim=64,
+                       embedding_dim=512,
+                       head_num=8,
+                       mlp_num=2,
+                       layer_num=8,
+                       memory_len=64,
+                       activation=nn.GELU(),
+                       out_dim = 4,
+                       constrastive_loss=None, contrastive_mask_rate=None):
+        super(CoBERL, self).__init__()
+        self.embedding_dim = embedding_dim
+        self.encoder = VisualEncoder()
+        self.input_dim = input_dim
+        self.out_dim = out_dim
+        self.gtrxl = GTrXL(input_dim=input_dim,
+                           head_dim=head_dim,
+                           embedding_dim=embedding_dim,
+                           head_num=head_num,
+                           mlp_num=mlp_num,
+                           layer_num=layer_num,
+                           memory_len=memory_len,
+                           activation=activation
                            )
 
-        self.gru = nn.GRU(input_size=512, hidden_size=512, num_layers=1, bias=True)
-        self.lstm = nn.LSTM(input_size=512, hidden_size=512, num_layers=1)
-        self.v_head = ValueNetwork()
+        self.critic_function = nn.Linear(self.input_dim, 512)
+        self.gru = nn.GRU(input_size=self.embedding_dim, hidden_size=self.embedding_dim, num_layers=1, bias=True)
+        self.lstm = nn.LSTM(input_size=self.embedding_dim, hidden_size=self.embedding_dim, num_layers=1)
+        self.v_head = ValueNetwork(out_dim)
 
     def create_masks_targets(self, input, perc=0.15, token=0):
         mask = input.ge(perc)
@@ -71,7 +85,7 @@ class CoBERL(nn.Module):
         return masked, input, mask
 
     def compute_aux_loss(self, input1, input2, mask_ext):
-        print(input1.shape)
+        # print(input1.shape)
         batch_size, seq_dim, feat_dim = input1.shape
         input1 = torch.reshape(input1, shape=(-1, feat_dim))
         input2 = torch.reshape(input2, shape=(-1, feat_dim))
@@ -86,6 +100,7 @@ class CoBERL(nn.Module):
         labels = F.one_hot(labels_idx, input1.shape[0] * 2)
         # Mask out the same image pair.
         mask = F.one_hot(labels_idx, input1.shape[0])
+
         # Compute logits.
         logits_11 = torch.matmul(input1, input1.T)
         logits_22 = torch.matmul(input2, input2.T)
@@ -108,7 +123,7 @@ class CoBERL(nn.Module):
 
         loss_12 = -torch.sum(labels * F.log_softmax(logits_1211, dim=-1))
         loss_21 = -torch.sum(labels * F.log_softmax(logits_2122, dim=-1))
-        print(loss_12.shape, mask_ext.shape)
+        # print(loss_12.shape, mask_ext.shape)
         loss = torch.reshape(loss_12 + loss_21, [batch_size, seq_dim]) * mask_ext
         inv_penalty = torch.reshape(inv_penalty, [batch_size, seq_dim]) * mask_ext
 
@@ -119,29 +134,35 @@ class CoBERL(nn.Module):
     def forward(self, sampled_batch, previous_rewards=None, encoded_actions=None):
         # The previous reward and one-hot encoded action are concatenated and projected
         # with a linear layer into a 64-dimensional vector
-        encoded_actions = F.one_hot(sampled_batch.long())
-        prev_reward_action = torch.rand(size=(1, 64)) if None in [previous_rewards, encoded_actions] else torch.concat(
-            (previous_rewards, encoded_actions))
 
-        y = self.encoder(sampled_batch, prev_reward_action).reshape((1,1,512))
-        print("fully encoded", y.shape)
+        # encoded_actions = F.one_hot(sampled_batch.long())
+        # prev_reward_action = torch.rand(size=(1, 64)) if None in [previous_rewards, encoded_actions] else torch.concat(
+        #     (previous_rewards, encoded_actions))
+
+        #y = self.encoder(sampled_batch, prev_reward_action).reshape((1,1,512))
+        y = sampled_batch
+        # print("fully encoded", y.shape)
 
         transformer_inputs, transformer_targets, mask = self.create_masks_targets(y, perc=0.15, token=0)
-        print('transformer_inputs', transformer_inputs.shape, transformer_targets.shape, mask.shape)
-        output_transformer_contrastive = self.gtrxl(transformer_inputs)['logit']  # .reshape((1, 512))
-        contrastive_loss = self.compute_aux_loss(output_transformer_contrastive.reshape((1, 1, 512)),
-                                                 transformer_targets.reshape((1, 1, 512)), mask.reshape((1, 1, 512)))
-        x = self.gtrxl(transformer_inputs)['logit'].reshape((1, 512))
+        # print('transformer_inputs', transformer_inputs.shape, transformer_targets.shape, mask.shape)
+        output_transformer_contrastive = self.gtrxl(transformer_inputs.reshape((1, 1, self.embedding_dim)))['logit']
+
+        output_transformer_contrastive = self.critic_function(output_transformer_contrastive)
+        transformer_targets = self.critic_function(transformer_targets)
+
+        contrastive_loss = self.compute_aux_loss(output_transformer_contrastive,
+                                                 transformer_targets, mask)
+        x = self.gtrxl(transformer_inputs.reshape((1, 1, self.embedding_dim)))['logit']
 
         # x = self.gtrxl(y)['logit'].reshape((1, 512))
-        y = y.reshape((1, 512))
-        print("x y ", x.shape, y.shape)
+        y = y.reshape((1, 1, self.embedding_dim))
+        # print("x y ", x.shape, y.shape)
         z, h_n = self.gru(y, x)
-        print("GRU", z.shape)
+        # print("GRU", z.shape)
         out, (h_n, c_n) = self.lstm(z)
-        print('lstm', out.shape, y.shape)
+        # print('lstm', out.shape, y.shape)
         v_input = torch.concat((out, y), dim=1).flatten()
-        print('concat', v_input.shape)
+        # print('concat', v_input.shape)
 
         value_estimation = self.v_head(v_input)
         rl_loss = 0  # compute_rl_loss(value_estimation, extra_args)
@@ -152,7 +173,7 @@ class CoBERL(nn.Module):
 
 if __name__ == "__main__":
   model = CoBERL()
-  input = torch.rand(size=(1, 3, 240, 240))
+  input = torch.rand(size=(4, 3, 240, 240))
   v_estimation, loss = model(input)
   loss.backward()
   print(v_estimation.shape)

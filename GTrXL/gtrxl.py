@@ -382,6 +382,7 @@ class GatedTransformerXLLayer(torch.nn.Module):
         Returns:
             - output (:obj:`torch.Tensor`): layer output of shape (cur_seq, bs, input_dim)
         """
+
         # concat memory with input across sequence dimension
         full_input = torch.cat([memory, inputs], dim=0)  # full_seq x bs x input_dim
         x1 = self.layernorm1(full_input)

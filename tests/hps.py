@@ -69,11 +69,11 @@ def add_arguments(parser):
     parser.add_argument('--save_dir', type=str, default='./saved_models')
     parser.add_argument('--desc', type=str, default='test')
     parser.add_argument('--hparam_sets', '--hps', type=str)
-    parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--cpu', type=str, default='0')
 
     # model
     parser.add_argument('--model', type=str, default='vmpo', help='{vmpo|ppo}')
-    parser.add_argument('--state_rep', type=str, default='gtrxl', help='{none|lstm|trxl|gtrxl}')
+    parser.add_argument('--state_rep', type=str, default='coberl', help='{none|lstm|trxl|gtrxl}')
     parser.add_argument('--n_latent_var', type=int, default=10)
     parser.add_argument('--n_layer', type=int, default=1)
     parser.add_argument('--n_head', type=int, default=1)

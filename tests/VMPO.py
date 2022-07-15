@@ -2,9 +2,10 @@ import torch
 import numpy as np
 import torch.nn as nn
 from torch.distributions import Categorical
-from model.encoder import VisualEncoder
 
-from GTrXL.gtrxl import GTrXL
+from Transformer_RL.GTrXL.gtrxl import GTrXL
+from Transformer_RL.model.model import CoBERL
+from Transformer_RL.model.encoder import StateEncoder
 
 
 class Memory:
@@ -39,7 +40,7 @@ class StateRepresentation(nn.Module):
         inp_dim = H.state_dim + H.action_dim + 1  # current state, previous action and reward
         out_dim = H.emb_size
 
-        self.resnet = lambda x: torch.tensor(x).to(H.device)
+        self.resnet = StateEncoder(H.n_latent_var, 512 - H.action_dim - 1) #lambda x: torch.tensor(x).to(H.device)
 
         if H.state_rep == 'lstm':
             self.layer = nn.LSTMCell(inp_dim, out_dim)
@@ -52,7 +53,18 @@ class StateRepresentation(nn.Module):
                 head_num=H.n_head,
                 embedding_dim=out_dim
             )
-
+        elif H.state_rep == 'coberl':
+            self.layer = CoBERL(
+                input_dim=512,
+                head_dim=64,
+                embedding_dim=512,
+                head_num=H.n_head,
+                mlp_num=2,
+                layer_num=H.n_layer,
+                memory_len=64,
+                activation=nn.GELU(),
+                out_dim=H.emb_size
+            )
         self.init_action = nn.Parameter(torch.rand(H.action_dim))
         self.init_reward = nn.Parameter(torch.rand(1))
 
@@ -70,7 +82,7 @@ class StateRepresentation(nn.Module):
             if self.state_rep == 'lstm':
                 self.h = self.h0.unsqueeze(0)
                 self.c = self.c0.unsqueeze(0)
-            if self.state_rep in ['trxl', 'gtrxl']:
+            if self.state_rep in ['trxl', 'gtrxl', 'coberl']:
                 self.inputs = []
                 self.mems = tuple()
         else:
@@ -94,8 +106,18 @@ class StateRepresentation(nn.Module):
             _inputs = torch.stack(self.inputs, dim=0)
             # output = self.layer(_inputs)
             output = self.layer(_inputs)
+
             pred = output['logit']
             return pred[-1][0]
+        elif self.state_rep == 'coberl':
+            self.inputs.append(inp)
+            #_inputs = torch.stack(self.inputs, dim=0)
+            # value_estimation, contrastive_loss  = self.layer(_inputs)
+            #inp = torch.reshape()
+            value_estimation, contrastive_loss = self.layer(inp)
+
+            return value_estimation
+            
 
     def batch_forward(self, ts, images, actions, rewards):
 
