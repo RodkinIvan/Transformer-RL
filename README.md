@@ -1,5 +1,5 @@
 # Transformers applied to RL tasks
-Transformers learned with reinforce and V-MPO
+Transformers trained with reinforce and V-MPO
 ## VMPO
 ### GTrXL transformer
 ![architecture](img/architecture.png "architecture")
